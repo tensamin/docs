@@ -9,6 +9,12 @@ import tailwindcss from "@tailwindcss/vite";
 // https://astro.build/config
 export default defineConfig({
   outDir: "dist",
+  redirects: {
+    "/canary/": "/using/canary/",
+    "/iota/": "/installation/#setup-an-iota",
+    "/obtainium/": "/installation/#updates-with-obtainium",
+    "/updates/": "/installation/#iota-updates",
+  },
 
   integrations: [
     starlight({
@@ -45,11 +51,16 @@ export default defineConfig({
       sidebar: [
         "index",
         "installation",
-        "obtainium",
-        "iota",
-        "updates",
         {
-          label: "Developers",
+          label: "Using Tensamin",
+          items: [{ autogenerate: { directory: "using" } }],
+        },
+        {
+          label: "Hosting an Iota",
+          items: [{ autogenerate: { directory: "hosting" } }],
+        },
+        {
+          label: "Integrate TAuth",
           items: [{ autogenerate: { directory: "developers" } }],
         },
       ],

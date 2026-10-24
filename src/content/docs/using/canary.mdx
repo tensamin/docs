@@ -1,0 +1,71 @@
+---
+title: Canary channel
+description: Try upcoming Tensamin changes on the web, desktop, Android, or your own Iota.
+sidebar:
+  order: 8
+---
+
+import configs from '../../../../public/obtainium.json';
+
+Canary is the prerelease channel for trying upcoming changes. Expect bugs and
+use Stable for everyday use if you need reliability.
+
+## Browser
+
+Open the [Canary web app](https://app.canary.tensamin.net). Reload the page to get
+new deployments.
+
+## Desktop
+
+Open [Tensamin releases](https://github.com/TensaminDev/Production-Pins/releases)
+and choose a revision-specific `canary-` prerelease. Download the Linux file for your
+architecture and follow the [desktop instructions](/installation/#install-the-desktop-app).
+Install newer Canary releases manually or through the package manager that
+installed the app. Windows and macOS are coming soon.
+
+## Android
+
+Download the signed APK from a `canary-` prerelease and open it to install.
+Canary has a yellow icon and application ID `net.tensamin.client.canary`.
+Stable uses `net.tensamin.client`. They install separately, so you can keep both.
+Installing Canary does not replace or switch your Stable app.
+
+For updates, install a newer Canary APK or install
+[Obtainium](https://obtainium.imranr.dev/) and import this configuration:
+
+<ul>
+  {configs.filter((config) => config.name.toLowerCase().includes('canary')).map((config) => (
+    <li><a href={`obtainium://app/${encodeURIComponent(JSON.stringify(config))}`}>{config.name}</a></li>
+  ))}
+</ul>
+
+For manual Obtainium setup, use the [Android settings](/installation/#updates-with-obtainium),
+change the release-title filter to `^canary-`, and enable prereleases.
+The [JSON import file](/obtainium.json) also includes Canary.
+Android still checks signing keys and version codes. The app has no built-in
+updater or channel switch. iOS is coming soon.
+
+## Iota
+
+Download the Iota CLI and matching installer bundle from the same
+`canary-` prerelease, then follow [Iota setup](/installation/#setup-an-iota).
+Verify the signing key before running the CLI as root.
+
+An unmanaged system-wide installation keeps its channel in `/etc/iota/update.env`.
+Run `sudo iota update channel` to check it. Its updater follows that channel;
+the CLI cannot switch between Stable and Canary. Install the other channel's
+matching bundle separately and plan how to preserve account data and identities.
+Back up persistent state first. A binary rollback does not undo data changes.
+
+NixOS installations use their pinned flake sources and update through system
+rebuilds, not the Iota updater.
+
+## Picking the right release
+
+Tags such as `canary-<revision>` identify a particular build. The `canary` release
+alias moves to the latest Canary build and also includes its installers and Iota
+update metadata. Stable follows the same pattern with `stable-<revision>` and `stable`.
+
+Publication waits for builds, server deployment, and web deployment to succeed.
+Canary uses different default services from Stable. Do not assume that accounts
+or stored data transfer between channels.

@@ -1,0 +1,160 @@
+---
+title: TAuth reference
+description: App identity, signed authorization, scopes, routing, and TAuth limits.
+sidebar:
+  order: 2
+---
+
+import Planned from '../../../components/Planned.astro';
+
+For the integration sequence, start with [TAuth getting started](/developers/tauth/). This page describes the current TAuth implementation. OAuth and OpenID Connect client libraries are not a substitute for its signed requests and MTP exchange.
+
+## Registration and credentials
+
+Registration requires an existing owner user, an available local owner account credential, and a configured Iota ID. The Iota operator creates the app with `iota apps create` as shown in the getting started guide. Repeat `--redirect` to register more than one callback.
+
+The CLI also supports:
+
+```sh
+iota apps list
+iota apps show <app-id>
+iota apps export <app-id> --output ./app.ta
+iota apps delete <app-id> --yes
+```
+
+Iota stores an internal credential and exports `.ta` with owner-only permissions on Unix. Protect every copy of it. Export can recover a copy while Iota still holds the credential. There is no v1 app-key rotation or recovery mechanism if all copies are lost; a new key creates a new app ID.
+
+Deleting an app removes its local registration and internal credential. It does not remove exported credentials, DNS, or the hosted manifest, and it is not global revocation of users' grants. Remove public discovery records yourself and handle user grants separately.
+
+## Domain and signed identity
+
+The app ID is the SHA-256 fingerprint of the canonical MTP public-key bundle. Discovery looks up `_tauth.<domain>` for:
+
+```text
+v=TAUTH1;app=<app-id>;manifest=<sha256-of-manifest-body>
+```
+
+The manifest lives at `https://<domain>/.well-known/tauth.json`. The `manifest` hash covers the exact HTTP response body bytes, not a normalized JSON representation.
+
+| Manifest field | Meaning |
+| --- | --- |
+| `version` | `1` |
+| `app_id` | App public-key fingerprint matching DNS and the request |
+| `public_key` | Base64 MTP public-key bundle |
+| `name` | Nonempty app name |
+| `domain` | Domain matching the authorization request |
+| `redirects` | Exact allowed redirect URI strings |
+| `owner_certificate` | Base64 JSON certificate binding the app to its owner key |
+| `signature` | Base64 Ed25519 signature made with the app key |
+
+The owner certificate contains `version`, `app_id`, `app_public_key`, `owner_principal`, `owner_public_key`, `owner_iota_id`, `issued_at`, and an owner-key `signature`. Verification checks the signature and its binding to the manifest's app key. It does not establish the owner's real-world identity.
+
+Name or redirect changes require a newly signed manifest and an updated DNS manifest hash. The current CLI exposes create, list, show, export, and delete, but no manifest edit or re-sign command. Do not hand-edit the generated manifest and expect it to remain valid.
+
+## Redirect rules
+
+Redirect matching uses the complete registered string. Scheme, host, port, path, and query must match; do not rely on URL normalization to make different strings equivalent.
+
+- HTTPS is required, except HTTP with `localhost`, `127.0.0.1`, or `[::1]`.
+- User information and fragments are rejected.
+- Registered queries must not contain reserved keys `code`, `state`, `locator`, or `error`.
+- The domain in the request must be trimmed and lowercase.
+
+The local HTTP exception applies to callbacks, not to the HTTPS discovery manifest.
+
+## Signed authorization request
+
+The `/authorize` page accepts a `request` query parameter containing base64url-encoded signed JSON. The request has these fields:
+
+| Field | Value |
+| --- | --- |
+| `version` | `1` |
+| `app_id` | App fingerprint |
+| `domain` | Canonical app domain |
+| `redirect_uri` | Exact registered callback URI |
+| `scopes` | Array of scope strings |
+| `state` | Nonempty value correlating this attempt with its callback |
+| `pkce_challenge` | Base64url SHA-256 digest of the verifier, without padding |
+| `expires_at` | Unix timestamp in seconds, in the future and no more than 300 seconds ahead |
+| `signature` | Base64 Ed25519 app-key signature |
+
+The verifier reconstructs compact JSON with the unsigned fields in the table's order, excluding `signature`, using Rust `serde_json` serialization. Sign those bytes, not the base64url wrapper. Manifest signatures similarly cover their unsigned fields in the manifest table's order. Matching field order and JSON serialization matters when implementing another client.
+
+Generate unpredictable state and verifier values for each attempt. Keep pending state and the verifier on the app backend, associated with the initiating browser session. Reject callbacks that do not match that pending attempt. The request signature, callback state check, and PKCE each serve a different check; keep all of them.
+
+Iota verifies DNS, the exact manifest hash, app fingerprint, owner certificate, manifest signature, request signature, redirect, scopes, and expiry. Approval creates a persistent grant. A secure grant covering the requested scopes can be reused without prompting; scope expansion requires approval.
+
+## Callback and code exchange
+
+Success appends `code`, `state`, and `locator` to the callback. Denial appends `error=access_denied` and `state`. These callback values are not session credentials.
+
+The client also sends an opener message with `type: "tauth.authorization"` and the same result fields. Its `targetOrigin` is the callback origin. A receiving app still needs to check `event.origin`, `event.source`, and state before accepting a message.
+
+Exchange uses `TAuthExchangeCode` with `AuthorizationCode`, `AppId`, `RedirectUri`, and `CodeVerifier`. The original request is retrieved from the code and verified again, including expiry and discovery. The code must match the app, redirect, PKCE challenge, and a secure grant. A successful `TAuthExchangeCodeResponse` contains `SessionToken`, `AppId`, `Principal`, `Scopes`, and `Locator`.
+
+| Lifetime | Limit |
+| --- | --- |
+| Signed request | At most five minutes |
+| Authorization code | 60 seconds and one successful exchange |
+
+Both expiry checks apply during exchange. A newly issued code does not extend the signed request's lifetime. The current session storage has no time-based expiry field; do not apply the code's 60-second lifetime to a session. Revocation invalidates sessions.
+
+## Scopes and operations
+
+| Scope | MTP operations | Access |
+| --- | --- | --- |
+| `identity.read` | `TAuthUser`, `TAuthPublicLookup` | Current identity and public profile lookup |
+| `contacts.read` | `TAuthContacts` | Canonical contact IDs |
+| `metadata.read` | `TAuthMetadataGet` | Read this app's JSON for the user |
+| `metadata.write` | `TAuthMetadataSet`, `TAuthMetadataDelete` | Replace or delete this app's JSON for the user |
+
+Unknown scopes are rejected. Read and write permissions are separate. Each operation checks the session and its required scope on Iota; access to raw MTP messages does not bypass these checks.
+
+## App JSON and revocation
+
+Each user has one JSON text value per app ID. Iota validates JSON and accepts at most 16 MiB, measured in bytes. Writes replace the whole value, with the last write winning. A missing value is distinct from a stored JSON `null`.
+
+The Tensamin client's app settings let users view grants, edit raw JSON, and revoke access regardless of the app's scopes. Treat stored JSON as user-editable data.
+
+`TAuthDisconnectDelete` uses the current session to revoke its user/app grant. This removes all sessions for that grant, not just the calling session. User revocation and app disconnect atomically delete the grant, pending codes, sessions, and JSON. No metadata scope is required to disconnect.
+
+## Discovery failures
+
+DNS, manifest fetch, or manifest validation failures mark matching grants `Insecure`. New authorizations and code exchanges fail until discovery verifies again. Existing sessions may continue to work; an insecure discovery state is not equivalent to revocation. Users can still revoke the grant.
+
+For discovery failures, check the public TXT record, exact manifest bytes and hash, HTTPS response, domain casing, and registered redirect. Recreating an app changes its identity and should not be the first response to a DNS problem.
+
+## Routing
+
+Hosted `.ta` credentials use Omega to discover the owner's connection route. Omega does not approve access or replace Iota's authorization checks. Forced Omikron credentials instead pin an Omikron URL and public key. To use that mode, replace the final `hosted` line in the create command with:
+
+```sh
+forced-omikron \
+  --omikron-url https://omikron.example \
+  --omikron-public-key '<base64 MTP public-key bundle>'
+```
+
+The credential's owner route and the callback's signed authorized-user locator are separate. Validate the user locator rather than substituting the app owner's route for it.
+
+### Direct Iota routing
+
+<Planned />
+
+Direct Iota mode is not currently available in `.ta` credentials. The planned mode must retain the same signed requests, discovery revalidation, PKCE binding, scope checks, and revocation behavior as Omikron-routed sessions.
+
+## Errors
+
+Only denial is described here as a callback error code. Other failures can surface as authorization-page or MTP error messages, not a uniform OAuth-style error response.
+
+| Failure | Action |
+| --- | --- |
+| `access_denied` | Respect the user's choice; do not exchange a code. |
+| State mismatch | Reject the callback and do not use its locator or code. |
+| Redirect or code binding mismatch | Check the complete registered redirect string and pending attempt. |
+| Request expired or too long-lived | Create a fresh signed request with an expiry no more than five minutes ahead. |
+| Code invalid, expired, or already used | Start a new authorization; do not replay the callback. |
+| PKCE verifier mismatch | Check that the verifier belongs to this pending authorization. |
+| Insecure grant or discovery failure | Repair DNS/manifest discovery before requesting new authorization. |
+| Invalid session | Discard the session and request authorization again when needed. |
+| Required scope missing | Request that scope through a new authorization. |
+| Invalid or oversized JSON | Send valid JSON no larger than 16 MiB. |

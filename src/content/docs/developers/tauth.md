@@ -1,13 +1,21 @@
 ---
-title: TAuth
-description: Register an app and request scoped Tensamin access.
+title: TAuth getting started
+description: Register your app and connect it to a user's Tensamin account.
+sidebar:
+  order: 1
 ---
 
-TAuth lets an app ask a Tensamin user for specific access without sharing account credentials. App identity is decentralized. Iota creates the key, DNS binds it to a domain, and an HTTPS manifest holds mutable app details.
+TAuth lets your app request limited access to a Tensamin account without receiving the user's account credentials. You register an app key, publish its identity on your domain, and send users to Tensamin to approve access.
 
-## Create an app
+This guide covers the integration flow. See the [TAuth reference](/developers/tauth-reference/) for request fields, scopes, limits, and failure handling. TAuth uses signed requests and MTP messages, not an OAuth or OpenID Connect endpoint contract.
 
-Use Iota operator CLI:
+## 1. Register your app
+
+You need a domain where you can publish DNS TXT records and serve an HTTPS file. You also need an app backend that can keep the app credential private and receive a callback.
+
+Registration currently uses the Iota operator CLI. Ask your Iota operator to run it if you do not operate the service yourself. The owner must already exist on that Iota, its account credential must be available locally, and Iota must have a configured `iota_id`. See [Iota setup](/installation/#setup-an-iota) if you need to host one.
+
+Replace the example values, including owner user ID `7`, with your own:
 
 ```sh
 iota apps create \
@@ -20,135 +28,53 @@ iota apps create \
   hosted --omega-url https://omega.example
 ```
 
-Forced Omikron replaces final line with:
+The command exports a private `.ta` credential, a signed public manifest, and a DNS TXT value. Keep `.ta` on your backend, outside source control and browser bundles. Publish only the manifest and TXT value. Use fresh output paths because the CLI refuses to overwrite existing files.
 
-```sh
-forced-omikron \
-  --omikron-url https://omikron.example \
-  --omikron-public-key '<base64 MTP public bundle>'
-```
+Register the callback URL exactly as your app will use it. HTTPS is required except for HTTP loopback URLs during local development.
 
-Creation writes internal credential with owner-only permissions and refuses to overwrite exports. Keep `.ta` out of source control and backups you do not control. No rotation or recovery exists in v1. Losing it means creating new app ID.
+## 2. Publish your app identity
 
-Other commands:
-
-```sh
-iota apps list
-iota apps show <app-id>
-iota apps export <app-id> --output ./app.ta
-iota apps delete <app-id> --yes
-```
-
-Deletion destroys internal key and registration. Remove DNS record and manifest yourself.
-
-## Publish DNS and manifest
-
-Creation prints TXT value for `_tauth.example.com`:
-
-```text
-v=TAUTH1;app=<sha256-app-id>;manifest=<sha256-manifest-body>
-```
-
-Publish generated file exactly at:
+Serve the generated `tauth.json` unchanged at:
 
 ```text
 https://example.com/.well-known/tauth.json
 ```
 
-Manifest contains public key, name, domain, exact redirect list, immutable owner certificate, and app-key signature. Name and redirects may change, but every manifest edit needs new app-key signature and new TXT manifest hash. App ID remains SHA-256 fingerprint of canonical MTP public bundle.
+Publish the TXT value printed by the CLI at `_tauth.example.com`. Its format is:
 
-Redirect matching is exact. Scheme, host, port, path, and registered query parameters must match. HTTPS is required, except HTTP loopback during local development. Fragments, user information, and reserved TAuth query parameters are rejected.
-
-## Authorization flow
-
-1. SDK loads `.ta`, creates state and PKCE verifier, then signs app ID, domain, exact redirect, scopes, PKCE challenge, and expiry.
-2. App opens generated Tensamin `/authorize` URL in popup.
-3. Page tries `tensamin://authorize` for desktop client, then stays as web fallback.
-4. Iota checks TXT, manifest hash, owner certificate, app key, request signature, redirect, scopes, and expiry.
-5. User sees app name, verified domain, redirect, and scopes.
-6. Allow creates persistent grant and one-time code valid for 60 seconds. Deny returns `error=access_denied` with original state.
-7. Redirect carries only `code`, `state`, and signed user gateway locator. Popup also sends same values with origin-checked `postMessage`.
-8. SDK exchanges code with matching pending state and PKCE verifier.
-
-Existing secure grant skips prompt for unchanged or narrower scopes. Added scopes prompt again.
-
-Scopes:
-
-- `identity.read` reads current identity and public profiles.
-- `contacts.read` returns canonical contact IDs.
-- `metadata.read` reads app-owned JSON.
-- `metadata.write` writes or deletes app-owned JSON.
-
-Iota checks scope for every command. Raw MTP access cannot bypass grant.
-
-## Rust SDK
-
-```rust
-use tauth_sdk::{AppCredentials, Scope, TAuthClient, TAuthConfig};
-use url::Url;
-
-let client = TAuthClient::new(
-    AppCredentials::load("app.ta")?,
-    TAuthConfig::new(
-        Url::parse("https://app.tensamin.net/authorize")?,
-        "example.com",
-        Url::parse("https://example.com/tauth/callback")?,
-    )?,
-);
-
-let (url, pending) = client.authorization_url([
-    Scope::IdentityRead,
-    Scope::ContactsRead,
-    Scope::MetadataRead,
-    Scope::MetadataWrite,
-])?;
+```text
+v=TAUTH1;app=<app-id>;manifest=<sha256-of-manifest-body>
 ```
 
-Store opaque serialized `PendingAuthorization` server-side. Never accept pending state supplied by browser. Callback exchange:
+The hash covers the exact file bytes. Reformatting the JSON or adding a newline changes it. DNS binds your domain to the app key and manifest. The manifest contains your app name, registered redirects, and signed owner certificate. This verifies cryptographic bindings, not a developer's real-world identity.
 
-```rust
-let session = client.exchange_callback(pending, &callback_url).await?;
-let user = session.user().await?;
-let contacts = session.contacts().await?;
-let profile = session.get_user_data(&contacts[0]).await?;
+## 3. Start an authorization
 
-let current = session.metadata().get_json().await?;
-session.metadata().set(&serde_json::json!({ "theme": "warm" })).await?;
-session.metadata().delete().await?;
+On your backend, create a fresh random state and PKCE verifier. Store them as a pending authorization tied to the browser session that started it. Never accept the stored pending authorization from the browser.
 
-let raw = session.raw();
-session.disconnect_and_delete().await?;
-```
+Use the app credential to sign a request containing your app ID, domain, exact callback URL, requested scopes, state, PKCE challenge, and expiry. Start with `identity.read` if your app only needs the current user's identity. The request can be valid for at most five minutes.
 
-Typed `metadata().get<T>()` returns `None` when value is absent. `metadata().set<T>()` serializes any Serde value. `codec` exposes low-level TAuth frame helpers.
+Open `https://app.tensamin.net/authorize?request=<encoded-request>` with the signed JSON request encoded as base64url. A popup is supported. Tensamin attempts to open the desktop client and also provides a web authorization page. It checks discovery and the request signature before presenting your app and requested scopes.
 
-Minimal runnable server lives in SDK `example` directory.
+An existing secure grant can skip the prompt for the same or narrower scopes. Requesting additional scopes requires approval.
 
-## Metadata ownership and revocation
+## 4. Handle the callback
 
-Each user owns one JSON text value per app ID. Iota validates JSON, caps it at 16 MiB, and uses last write wins. Client Security page shows grants in Developer-style table with raw JSON editor.
+On approval, your callback receives `code`, `state`, and `locator`. The locator is a signed description of the user's gateway route. On denial, the callback receives `error=access_denied` and `state`.
 
-User can revoke any grant in Client regardless of granted scopes. App may revoke only its own session through `disconnect_and_delete()`. Revoke atomically deletes grant, pending codes, sessions, and JSON.
+1. Look up the pending authorization for the initiating browser session and require an exact state match.
+2. Handle denial without exchanging a code.
+3. Exchange the code over TAuth MTP with the app ID, registered redirect URI, and stored PKCE verifier. Validate the signed locator before using its route.
+4. Keep the resulting session token private and use only the operations covered by its granted scopes.
 
-DNS or manifest failure marks grant `Insecure`. Existing sessions keep running, but Iota blocks new authorizations and SDK sessions until discovery verifies again.
+Codes are single-use and expire after 60 seconds. Exchange also rechecks the original request's expiry and DNS/manifest discovery. A code can therefore fail before its own expiry if the request has expired or discovery has changed. Start a fresh authorization rather than reusing an old callback.
 
-## Routing
+The popup also posts the result to its opener. If you consume that message, check the sender origin, popup window, and pending state. Do not exchange the same result through both message and redirect handlers.
 
-Hosted credentials use Omega only to discover connection route. Omega does not grant TAuth authority. Forced Omikron pins owner routing configuration in `.ta`. Callback's authorized user locator remains separate from owner locator.
+## 5. Support disconnecting
 
-Direct Iota mode is planned. It must use same TAuth MTP protocol and server-side checks as Omikron.
+Users can revoke your app in the Tensamin client's app settings. Your app can also disconnect its current user's grant with `TAuthDisconnectDelete`. Revocation deletes that user's grant, sessions, pending codes, and app JSON together. Be ready to ask for authorization again when a session becomes invalid.
 
-Use the SDK's typed methods for account operations. Hosting the service needed
-to register your app is covered in [Iota setup](/iota/).
+For app-owned JSON, request `metadata.read` and/or `metadata.write`. Each user has one JSON value per app, limited to 16 MiB. Users can inspect and edit it themselves, so validate it when reading.
 
-## Errors and troubleshooting
-
-- `access_denied`: user denied request.
-- State mismatch: callback does not belong to stored pending authorization.
-- Redirect mismatch: callback URL differs from registered exact redirect.
-- Invalid or expired code: code exceeded 60 seconds or was already used.
-- Scope denied: session lacks command scope.
-- Insecure grant: TXT or manifest validation failed.
-- Invalid JSON or too large: metadata is malformed or exceeds 16 MiB.
-
-When DNS changes, check public resolver output, exact manifest bytes, TXT hash, HTTPS certificate, domain casing, and redirect string. Recreate app only when `.ta` is lost or compromised.
+Continue with the [TAuth reference](/developers/tauth-reference/) for routing modes, exact redirect rules, revocation, and troubleshooting.

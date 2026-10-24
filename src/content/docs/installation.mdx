@@ -1,0 +1,201 @@
+---
+title: Installation
+description: Install the Tensamin app or set up your own Iota account service.
+sidebar:
+  order: 1
+---
+
+import configs from '../../../public/obtainium.json';
+import Planned from '../../components/Planned.astro';
+
+Download apps and Iota bundles from the [latest Stable release](https://github.com/TensaminDev/Production-Pins/releases/latest).
+Want to try upcoming changes? See [Canary channel](/using/canary/).
+
+Prefer a browser? Open the [web app](https://app.tensamin.net). No installation needed.
+
+## Install the desktop app
+
+### Linux
+
+Download the file for your architecture. Install `.deb` or `.rpm` files with
+your distribution's package installer. For an AppImage, run:
+
+```sh
+chmod +x ./Tensamin-*.AppImage
+./Tensamin-*.AppImage
+```
+
+Run these commands in a folder containing only the AppImage you want to launch.
+To update, install a newer release or use the package manager that installed it.
+The app has no built-in updater.
+
+### Windows
+
+<Planned />
+
+Coming soon.
+
+### macOS
+
+<Planned />
+
+Coming soon.
+
+## Install the mobile app
+
+### Android
+
+Download and open the signed APK from your chosen release. If prompted, allow
+your browser or file manager to install apps.
+
+To update, install a newer APK from the same channel or use Obtainium below.
+The app has no built-in updater or channel switch.
+
+#### Updates with Obtainium
+
+Install [Obtainium](https://obtainium.imranr.dev/), then import the Stable configuration:
+
+<ul>
+  {configs.filter((config) => !config.name.toLowerCase().includes('canary')).map((config) => (
+    <li><a href={`obtainium://app/${encodeURIComponent(JSON.stringify(config))}`}>{config.name}</a></li>
+  ))}
+</ul>
+
+Alternatively, download the [JSON import file](/obtainium.json) and select Stable
+on Obtainium's Import/Export page. It includes both channels.
+
+For manual setup, use these settings:
+
+| Setting | Value |
+| --- | --- |
+| Source URL | `https://github.com/TensaminDev/Production-Pins` |
+| Override Source | GitHub |
+| Release-title filter | `^stable-` |
+| APK filter | `[.]apk$` |
+| Allow prereleases | Off |
+| Architecture filtering | On |
+| Fallback to older releases | On |
+| Release Date as Version | On |
+| Version Detection | Off |
+
+If multiple compatible APKs appear, select the correct one. Architecture filtering
+uses filenames and is best effort. Obtainium tracks release dates, but Android
+still requires a compatible signing key and an increasing version code.
+
+### iOS
+
+<Planned />
+
+Coming soon.
+
+## Setup an Iota
+
+Iota hosts your Tensamin account service. Back up its persistent data and identity
+files. Its identity is separate from your account keys. Hosting an Iota does not
+host the web app.
+
+### Linux with systemd
+
+1. Download the Iota CLI and matching installer ZIP from the same
+   [release](https://github.com/TensaminDev/Production-Pins/releases).
+   Choose your host's architecture, `x86_64` or `aarch64`.
+2. Verify the download's provenance before running it as root. The signing key
+   ID is `primary`, with this Ed25519 public key:
+
+   ```text
+   3b9da4515a254a0082e5c0ee55164a54958258763f7a0d5e45879512aa6e91a9
+   ```
+
+   The release's `IOTA_RELEASE_PUBLIC_KEY` and installer update configuration
+   must match. A key bundled with an untrusted binary does not establish trust.
+3. Install and accept the terms, replacing filenames for your architecture:
+
+   ```sh
+   chmod +x ./iota-linux-x86_64
+   sudo ./iota-linux-x86_64 daemon bootstrap \
+     --bundle ./iota-installer-linux-x86_64.zip --operator "$USER"
+   sudo iota terms accept --system
+   ```
+4. Log out and back in to activate membership in `iota-operators`, which grants
+   access to the IPC socket.
+
+The installer creates `iota-daemon.service` and `iota-daemon.socket`, plus an
+automatic update timer. For manual-only updates, run:
+
+```sh
+sudo systemctl disable --now iota-update.timer
+```
+
+#### Iota updates
+
+Check and install updates manually with:
+
+```sh
+sudo iota update check
+sudo iota update apply
+```
+
+The timer checks hourly with up to 15 minutes of jitter. These commands apply to
+unmanaged system-wide Linux installations and use the installed signing key and
+trust configuration. Environment variables cannot override that trust.
+
+The updater verifies signatures, binary hashes, sizes, and increasing sequences.
+It rejects replayed or conflicting updates. Signed metadata expires after 90 days;
+expired metadata requires a refreshed manifest from the publisher.
+
+Back up persistent state before updates that may change its format. Rolling back
+the binary does not undo account data changes. For portable per-user installs,
+replace the extracted release files instead.
+
+See [backups and moving hosts](/hosting/backups-and-moving-hosts/) for what to save.
+
+Show the installed channel with `sudo iota update channel`. It is recorded in
+`/etc/iota/update.env` and cannot be switched through the CLI. See
+[Canary Iota setup](/using/canary/#iota) to try another channel.
+
+### NixOS
+
+Add this flake input and pass `inputs` through your system's `specialArgs`:
+
+```nix
+inputs.tensamin.url = "git+https://github.com/TensaminDev/Production-Pins?ref=main";
+```
+
+This follows the repository's pinned sources, not a guaranteed Stable channel.
+Review the revision you lock before deploying.
+
+Import the module, install the CLI, and set your runtime TLS paths:
+
+```nix
+{ inputs, pkgs, ... }: {
+  imports = [ inputs.tensamin.nixosModules.iota ];
+  environment.systemPackages = [
+    inputs.tensamin.packages.${pkgs.stdenv.hostPlatform.system}.iota
+  ];
+  tensamin.iota = {
+    enable = true;
+    certFile = "/run/secrets/iota-cert.pem";
+    keyFile = "/run/secrets/iota-key.pem";
+  };
+}
+```
+
+Rebuild your system, then accept the terms with `sudo iota terms accept --system`.
+Add operators to the `iota` group for access to `/run/iota/iota.sock`.
+The service and socket are both named `iota`.
+
+Keep secret paths as strings so Nix does not copy secrets into the store.
+Configure Iota through the module's `settings` or `settingsFile`, not the generated
+`stateDir/config.yaml`. Listener options take precedence; omitted identity and
+discovery fields retain daemon values. Identities stay under `stateDir/identity`.
+
+To update, update your flake lock and rebuild. NixOS does not use Iota's updater.
+
+### Network requirements for both platforms
+
+- Provide a TLS certificate and key for enabled network and loopback web listeners.
+  The service user needs read access to both files and access through their parent
+  directories. Restart Iota after certificate renewal.
+- Allow TCP and UDP on port `1984` if exposing the default network listener.
+- For a loopback listener, explicitly set a loopback bind address. Selecting
+  loopback mode alone does not change the address.

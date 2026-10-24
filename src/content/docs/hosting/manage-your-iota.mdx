@@ -1,0 +1,118 @@
+---
+title: Manage your Iota
+description: Check Iota health, manage hosted accounts, and maintain configuration and updates.
+sidebar:
+  order: 1
+---
+
+import Planned from '../../../components/Planned.astro';
+
+Start with [Iota installation](/installation/#setup-an-iota). This page covers
+an installed account service, not an Omega or Omikron deployment.
+
+## Operator access
+
+Access to `/run/iota/iota.sock` grants the full operator role, including account
+management, credential export, identity changes, and daemon control. Only grant
+it to people you fully trust. It is not a read-only monitoring role.
+
+The Linux installer uses the `iota-operators` group. The NixOS module uses `iota`.
+Start a new login session after changing group membership. Do not make the socket
+world-writable to fix a permission error.
+
+## Check health and logs
+
+```sh
+iota status
+iota health
+iota components
+iota logs --limit 100
+iota omikron status
+iota daemon startup-status
+```
+
+For startup failures, use `sudo journalctl -u iota-daemon.service -b` on an
+installer-managed host, or `sudo journalctl -u iota.service -b` on NixOS.
+Review logs before sharing them. Remove credentials and personal data.
+
+Running `iota` without a command opens the terminal interface. Parts of that
+interface are unfinished. Prefer the explicit commands here for operations.
+`iota --help` lists the command groups.
+
+## Configuration, storage, and TLS
+
+On a standard Linux installation, configuration lives in `/etc/iota/config.yaml`
+and persistent state in `/var/lib/iota`. State includes `storage` and `identity`.
+Custom paths can differ. Check your service definition before moving files.
+
+Use `iota config get` to inspect the loaded configuration. On unmanaged installs,
+edit the configuration file and run `iota config reload`. Restart the service
+after listener or TLS changes. `iota config set` supports only selected keys,
+not arbitrary YAML fields. For example:
+
+```sh
+iota config set read_receipts_enabled false
+```
+
+On NixOS, change the module's `settings` or `settingsFile` and rebuild instead.
+Do not edit its generated `stateDir/config.yaml`.
+
+Enabled network and loopback web listeners need a TLS certificate and key that
+the service user can read. Parent directories must also allow access. Renew
+certificates before expiry and restart Iota after renewal. Loopback mode alone
+does not select a loopback bind address.
+
+Monitor free disk space. `storage_limits` controls asset size, per-user quotas,
+active uploads, and reserved free space. Replacing an asset temporarily counts
+both copies. See [backups and moving hosts](/hosting/backups-and-moving-hosts/)
+before touching storage or identity files.
+
+## Hosted accounts
+
+```sh
+iota users list
+iota users show 42
+iota users add create alice
+iota users add tu /secure/alice.tu
+iota users credential export 42 --destination /secure/alice.tu
+```
+
+Replace `42`, `alice`, and file paths with your account details. A `.tu` file
+contains account credentials. Keep it private and transfer it securely. Import
+attaches an account through the account service; it does not copy message history
+or assets from another host.
+
+Invitations are not a complete operator workflow. Local Iota invitations are
+unsupported, the terminal invitation screen is unfinished, and the CLI has no
+invitation command. Omega-backed invitations require a working upstream service.
+Do not promise local-only onboarding through invitations.
+
+These account operations are different. Check the user ID and take a backup
+before destructive changes:
+
+| Command | Effect |
+| --- | --- |
+| `iota users hosting release 42 --yes` | Releases the hosting assignment through Omega and retains hosted data locally. |
+| `iota users data purge 42 --yes` | Purges this Iota's stored user data, not the remote account. |
+| `iota users account delete 42 --yes` | Requests account deletion using stored credentials, or credentials supplied with `--tu /secure/alice.tu`. This is not a host move. |
+| `iota users repair force-detach 42 --yes` | Detaches locally without changing Omega. This can leave assignments inconsistent. |
+
+For an inconsistent account, start with `iota users repair diagnostics 42`.
+`iota users repair reconcile 42` checks the remote assignment. Force-detach is
+not a replacement for a successful release.
+
+## Updates
+
+Back up state before updating. On an unmanaged system installation, use
+`sudo iota update check` and `sudo iota update apply`. On NixOS, update your flake
+lock and rebuild. See [installation](/installation/#iota-updates) for the update
+timer, signing checks, and channel restrictions. Replacing a binary does not
+reverse data migrations.
+
+## Standalone federation
+
+<Planned />
+
+Standalone federation is intended to let Iotas discover and communicate with each
+other directly or through configured relays. Backend support exists, but the main
+Tensamin client does not yet support this as an end-to-end setup.
