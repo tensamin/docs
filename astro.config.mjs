@@ -30,7 +30,7 @@ export default defineConfig({
         {
           icon: "code-branch",
           label: "Git",
-          href: "https://github.com/TensaminDev",
+          href: "https://github.com/tensamin",
         },
         {
           icon: "external",

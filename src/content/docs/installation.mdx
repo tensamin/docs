@@ -8,7 +8,7 @@ sidebar:
 import configs from '../../../public/obtainium.json';
 import Planned from '../../components/Planned.astro';
 
-Download apps and Iota bundles from the [latest Stable release](https://github.com/TensaminDev/Production-Pins/releases/latest).
+Download apps and Iota bundles from the [latest Stable release](https://github.com/tensamin/production-pins/releases/latest).
 Want to try upcoming changes? See [Canary channel](/using/canary/).
 
 Prefer a browser? Open the [web app](https://app.tensamin.net). No installation needed.
@@ -68,7 +68,7 @@ For manual setup, use these settings:
 
 | Setting | Value |
 | --- | --- |
-| Source URL | `https://github.com/TensaminDev/Production-Pins` |
+| Source URL | `https://github.com/tensamin/production-pins` |
 | Override Source | GitHub |
 | Release-title filter | `^stable-` |
 | APK filter | `[.]apk$` |
@@ -97,7 +97,7 @@ host the web app.
 ### Linux with systemd
 
 1. Download the Iota CLI and matching installer ZIP from the same
-   [release](https://github.com/TensaminDev/Production-Pins/releases).
+   [release](https://github.com/tensamin/production-pins/releases).
    Choose your host's architecture, `x86_64` or `aarch64`.
 2. Verify the download's provenance before running it as root. The signing key
    ID is `primary`, with this Ed25519 public key:
@@ -158,7 +158,7 @@ Show the installed channel with `sudo iota update channel`. It is recorded in
 Add this flake input and pass `inputs` through your system's `specialArgs`:
 
 ```nix
-inputs.tensamin.url = "git+https://github.com/TensaminDev/Production-Pins?ref=main";
+inputs.tensamin.url = "git+https://github.com/tensamin/production-pins?ref=main";
 ```
 
 This follows the repository's pinned sources, not a guaranteed Stable channel.
