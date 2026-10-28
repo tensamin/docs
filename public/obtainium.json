@@ -5,7 +5,7 @@
     "author": "tensamin",
     "name": "Tensamin",
     "overrideSource": "GitHub",
-    "additionalSettings": "{\"includePrereleases\":false,\"filterReleaseTitlesByRegEx\":\"^stable-\",\"apkFilterRegEx\":\"[.]apk$\",\"autoApkFilterByArch\":true,\"fallbackToOlderReleases\":true,\"sortMethodChoice\":\"date\",\"useLatestAssetDateAsReleaseDate\":true,\"releaseDateAsVersion\":true,\"versionDetection\":false}"
+    "additionalSettings": "{\"includePrereleases\":false,\"filterReleaseTitlesByRegEx\":\"^v[0-9]+[.][0-9]+-stable-[0-9a-f]{7}$\",\"apkFilterRegEx\":\"[.]apk$\",\"autoApkFilterByArch\":true,\"fallbackToOlderReleases\":true,\"sortMethodChoice\":\"date\",\"useLatestAssetDateAsReleaseDate\":true,\"releaseDateAsVersion\":true,\"versionDetection\":false}"
   },
   {
     "id": "net.tensamin.client.canary",
@@ -13,6 +13,6 @@
     "author": "tensamin",
     "name": "Tensamin Canary",
     "overrideSource": "GitHub",
-    "additionalSettings": "{\"includePrereleases\":true,\"filterReleaseTitlesByRegEx\":\"^canary-\",\"apkFilterRegEx\":\"[.]apk$\",\"autoApkFilterByArch\":true,\"fallbackToOlderReleases\":true,\"sortMethodChoice\":\"date\",\"useLatestAssetDateAsReleaseDate\":true,\"releaseDateAsVersion\":true,\"versionDetection\":false}"
+    "additionalSettings": "{\"includePrereleases\":true,\"filterReleaseTitlesByRegEx\":\"^v[0-9]+[.][0-9]+-canary-[0-9a-f]{7}$\",\"apkFilterRegEx\":\"[.]apk$\",\"autoApkFilterByArch\":true,\"fallbackToOlderReleases\":true,\"sortMethodChoice\":\"date\",\"useLatestAssetDateAsReleaseDate\":true,\"releaseDateAsVersion\":true,\"versionDetection\":false}"
   }
 ]

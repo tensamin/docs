@@ -11,6 +11,9 @@ import Planned from '../../components/Planned.astro';
 Download apps and Iota bundles from the [latest Stable release](https://github.com/tensamin/production-pins/releases/latest).
 Want to try upcoming changes? See [Canary channel](/using/canary/).
 
+Stable release titles and immutable tags use `vX.X-stable-<short-commit-hash>`,
+for example `v1.2-stable-a1b2c3d`.
+
 Prefer a browser? Open the [web app](https://app.tensamin.net). No installation needed.
 
 ## Install the desktop app
@@ -70,7 +73,7 @@ For manual setup, use these settings:
 | --- | --- |
 | Source URL | `https://github.com/tensamin/production-pins` |
 | Override Source | GitHub |
-| Release-title filter | `^stable-` |
+| Release-title filter | `^v[0-9]+[.][0-9]+-stable-[0-9a-f]{7}$` |
 | APK filter | `[.]apk$` |
 | Allow prereleases | Off |
 | Architecture filtering | On |
@@ -97,7 +100,7 @@ host the web app.
 ### Linux with systemd
 
 1. Download the Iota CLI and matching installer ZIP from the same
-   [release](https://github.com/tensamin/production-pins/releases).
+   [Stable release](https://github.com/tensamin/production-pins/releases/latest).
    Choose your host's architecture, `x86_64` or `aarch64`.
 2. Verify the download's provenance before running it as root. The signing key
    ID is `primary`, with this Ed25519 public key:

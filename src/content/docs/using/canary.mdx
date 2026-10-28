@@ -17,15 +17,15 @@ new deployments.
 
 ## Desktop
 
-Open [Tensamin releases](https://github.com/tensamin/production-pins/releases)
-and choose a revision-specific `canary-` prerelease. Download the Linux file for your
+Open [Canary downloads](https://github.com/tensamin/production-pins/releases/tag/canary)
+for the current `vX.X-canary-<short-commit-hash>` prerelease. Download the Linux file for your
 architecture and follow the [desktop instructions](/installation/#install-the-desktop-app).
 Install newer Canary releases manually or through the package manager that
 installed the app. Windows and macOS are coming soon.
 
 ## Android
 
-Download the signed APK from a `canary-` prerelease and open it to install.
+Download the signed APK from a `vX.X-canary-<short-commit-hash>` prerelease and open it to install.
 Canary has a yellow icon and application ID `net.tensamin.client.canary`.
 Stable uses `net.tensamin.client`. They install separately, so you can keep both.
 Installing Canary does not replace or switch your Stable app.
@@ -40,7 +40,7 @@ For updates, install a newer Canary APK or install
 </ul>
 
 For manual Obtainium setup, use the [Android settings](/installation/#updates-with-obtainium),
-change the release-title filter to `^canary-`, and enable prereleases.
+change the release-title filter to `^v[0-9]+[.][0-9]+-canary-[0-9a-f]{7}$`, and enable prereleases.
 The [JSON import file](/obtainium.json) also includes Canary.
 Android still checks signing keys and version codes. The app has no built-in
 updater or channel switch. iOS is coming soon.
@@ -48,7 +48,7 @@ updater or channel switch. iOS is coming soon.
 ## Iota
 
 Download the Iota CLI and matching installer bundle from the same
-`canary-` prerelease, then follow [Iota setup](/installation/#setup-an-iota).
+`vX.X-canary-<short-commit-hash>` prerelease, then follow [Iota setup](/installation/#setup-an-iota).
 Verify the signing key before running the CLI as root.
 
 An unmanaged system-wide installation keeps its channel in `/etc/iota/update.env`.
@@ -62,9 +62,15 @@ rebuilds, not the Iota updater.
 
 ## Picking the right release
 
-Tags such as `canary-<revision>` identify a particular build. The `canary` release
-alias moves to the latest Canary build and also includes its installers and Iota
-update metadata. Stable follows the same pattern with `stable-<revision>` and `stable`.
+Release titles and immutable tags use `vX.X-<stable|canary>-<short-commit-hash>`.
+The version comes from the pinned MTP protocol version, and the hash is the first
+seven characters of the production-pins commit. For example,
+`v1.2-canary-a1b2c3d` identifies a particular Canary build.
+
+The `canary` release alias moves to the latest Canary build and also includes its installers and Iota
+update metadata. Stable follows the same pattern with `vX.X-stable-<short-commit-hash>`
+and `stable`. Both aliases use the current build's release title. Obtainium's
+channel-specific title filters match only that channel, and Stable excludes prereleases.
 
 Publication waits for builds, server deployment, and web deployment to succeed.
 Canary uses different default services from Stable. Do not assume that accounts
