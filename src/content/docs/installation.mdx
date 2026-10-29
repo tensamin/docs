@@ -32,6 +32,31 @@ Run these commands in a folder containing only the AppImage you want to launch.
 To update, install a newer release or use the package manager that installed it.
 The app has no built-in updater.
 
+#### NixOS
+
+Use the native Nix package instead of the `.deb`, `.rpm`, or AppImage downloads.
+Add this flake input and pass `inputs` through your system's `specialArgs`:
+
+```nix
+inputs.tensamin.url = "github:tensamin/production-pins";
+```
+
+Add the desktop app to your NixOS configuration:
+
+```nix
+{ inputs, pkgs, ... }: {
+  environment.systemPackages = [
+    inputs.tensamin.packages.${pkgs.stdenv.hostPlatform.system}.client
+  ];
+}
+```
+
+Rebuild your system to install. The package supports `x86_64-linux` and
+`aarch64-linux`. It follows the repository's pinned sources, not a guaranteed
+Stable channel. Review the revision you lock before installing.
+
+To update, update your flake lock and rebuild.
+
 ### Windows
 
 <Planned />
@@ -161,13 +186,13 @@ Show the installed channel with `sudo iota update channel`. It is recorded in
 Add this flake input and pass `inputs` through your system's `specialArgs`:
 
 ```nix
-inputs.tensamin.url = "git+https://github.com/tensamin/production-pins?ref=main";
+inputs.tensamin.url = "github:tensamin/production-pins";
 ```
 
 This follows the repository's pinned sources, not a guaranteed Stable channel.
 Review the revision you lock before deploying.
 
-Import the module, install the CLI, and set your runtime TLS paths:
+Import the module, enable Iota, and install the CLI:
 
 ```nix
 { inputs, pkgs, ... }: {
@@ -175,15 +200,16 @@ Import the module, install the CLI, and set your runtime TLS paths:
   environment.systemPackages = [
     inputs.tensamin.packages.${pkgs.stdenv.hostPlatform.system}.iota
   ];
-  tensamin.iota = {
-    enable = true;
-    certFile = "/run/secrets/iota-cert.pem";
-    keyFile = "/run/secrets/iota-key.pem";
-  };
+  tensamin.iota.enable = true;
 }
 ```
 
 Rebuild your system, then accept the terms with `sudo iota terms accept --system`.
+
+On first startup, Iota generates its identity and the module generates a
+self-signed TLS certificate. Both persist under `stateDir`. To use your own
+certificate instead, set `tensamin.iota.certFile` and `tensamin.iota.keyFile`
+to runtime paths.
 Add operators to the `iota` group for access to `/run/iota/iota.sock`.
 The service and socket are both named `iota`.
 
@@ -196,9 +222,10 @@ To update, update your flake lock and rebuild. NixOS does not use Iota's updater
 
 ### Network requirements for both platforms
 
-- Provide a TLS certificate and key for enabled network and loopback web listeners.
-  The service user needs read access to both files and access through their parent
-  directories. Restart Iota after certificate renewal.
+- Enabled network and loopback web listeners require TLS. The NixOS module
+  generates a self-signed certificate by default; other installations need a
+  certificate and key. The service user needs read access to both files and
+  access through their parent directories. Restart Iota after certificate renewal.
 - Allow TCP and UDP on port `1984` if exposing the default network listener.
 - For a loopback listener, explicitly set a loopback bind address. Selecting
   loopback mode alone does not change the address.
