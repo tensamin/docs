@@ -59,10 +59,6 @@ export default defineConfig({
           label: "Hosting an Iota",
           items: [{ autogenerate: { directory: "hosting" } }],
         },
-        {
-          label: "Integrate TAuth",
-          items: [{ autogenerate: { directory: "developers" } }],
-        },
       ],
     }),
     mdx(),
